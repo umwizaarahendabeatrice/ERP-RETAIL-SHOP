@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Duka ERP – Retail Prototype</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#eef1f5;--fg:#14202e;--card:#fff;--mut:#5d6b7a;--ac:#1553c7;--bd:#d3d9e0;--bad:#b3261e;--ok:#12703f}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e141b;--fg:#e6ebf0;--card:#17202a;--mut:#93a0ae;--ac:#6b9bff;--bd:#2a3541;--bad:#f2867e;--ok:#5fd199}}
+:root[data-theme="dark"]{--bg:#0e141b;--fg:#e6ebf0;--card:#17202a;--mut:#93a0ae;--ac:#6b9bff;--bd:#2a3541;--bad:#f2867e;--ok:#5fd199}
+*{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+header{padding:16px 20px 0;max-width:1000px;margin:auto}
+h1{margin:0;font-size:22px;letter-spacing:-.01em}
+header p{margin:2px 0 12px;color:var(--mut)}
+nav{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--bd)}
+nav button{background:none;border:0;border-bottom:3px solid transparent;padding:8px 12px;color:var(--mut);font:inherit;cursor:pointer;white-space:nowrap}
+nav button.on{color:var(--fg);border-color:var(--ac);font-weight:600}
+main{max-width:1000px;margin:auto;padding:16px 20px 40px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:14px;margin-bottom:16px}
+h2{font-size:16px;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:10px 12px}
+.kpi b{display:block;font-size:19px}.kpi span{color:var(--mut);font-size:13px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+th{color:var(--mut);font-weight:600}.r{text-align:right}
+form,.row{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
+input,select{font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--fg);min-width:110px}
+button.b{font:inherit;padding:7px 12px;border:0;border-radius:4px;background:var(--ac);color:#fff;cursor:pointer}
+button.g{font:inherit;padding:3px 8px;border:1px solid var(--bd);border-radius:4px;background:none;color:var(--fg);cursor:pointer}
+button.d{color:var(--bad)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.msg{padding:8px 12px;border-radius:4px;margin-bottom:14px;border:1px solid}
+.msg.e{color:var(--bad);border-color:var(--bad)}.msg.s{color:var(--ok);border-color:var(--ok)}
+.rcpt{font-family:ui-monospace,Consolas,monospace;font-size:13px;border:1px dashed var(--mut);padding:10px;margin-top:12px;background:var(--bg)}
+.rcpt div{display:flex;justify-content:space-between}
+.mut{color:var(--mut)}.low{color:var(--bad);font-weight:600}
+</style></head><body>
+<header><h1>Duka ERP</h1><p>Retail prototype: Sales &amp; Inventory + Financials on one database</p>
+<nav id="nav"></nav></header><main id="app"></main>
+<script>
+/* ===== Single integrated data store (mirrors schema.sql) ===== */
+const KEY='duka_erp_v1',today=()=>new Date().toISOString().slice(0,10);
+const fmt=n=>'UGX '+Math.round(n).toLocaleString('en-US');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let D;
+function load(){try{const s=localStorage.getItem(KEY);if(s)return JSON.parse(s)}catch(e){}return null}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}}
+function init(){
+ D={seq:{p:0,c:0,s:0,po:0,je:0,mv:0},
+  accounts:[['1000','Cash','Asset'],['1200','Inventory','Asset'],['3000','Owner Equity','Equity'],['4000','Sales Revenue','Revenue'],['5000','Cost of Goods Sold','Expense']].map(([code,name,type])=>({code,name,type})),
+  products:[],customers:[],sales:[],items:[],purchases:[],moves:[],je:[],jl:[]};
+ tx(()=>{
+  post('OPEN','Owner capital',[{a:'1000',dr:5000000},{a:'3000',cr:5000000}]);
+  [['RICE-5KG','Rice 5kg',28000,22000,10,40],['OIL-3L','Cooking oil 3L',24000,19000,10,25],['SUGAR-1KG','Sugar 1kg',5500,4200,20,60]].forEach(([sku,name,price,cost,re,q])=>{
+   const p=addProduct({sku,name,price,reorder:re});receive(p.id,q,cost)});
+  addCustomer({name:'Grace Nakato',phone:'0772 000 111'});addCustomer({name:'Okello Traders',phone:'0701 000 222'});
+ });
+}
+function tx(f){const snap=JSON.stringify(D);try{const r=f();save();return r}catch(e){D=JSON.parse(snap);throw e}} /* atomic: all-or-nothing */
+function post(ref,memo,lines){
+ const dr=lines.reduce((s,l)=>s+(l.dr||0),0),cr=lines.reduce((s,l)=>s+(l.cr||0),0);
+ if(dr!==cr)throw Error('Journal entry out of balance');
+ if(lines.some(l=>!D.accounts.find(a=>a.code===l.a)))throw Error('Unknown account');
+ const id=++D.seq.je;D.je.push({id,date:today(),ref,memo});
+ lines.forEach(l=>D.jl.push({je:id,acct:l.a,dr:l.dr||0,cr:l.cr||0}));
+}
+function move(pid,type,qty,ref){D.moves.push({id:++D.seq.mv,pid,type,qty,ref,date:today()})}
+/* ===== Master data (CRUD) ===== */
+function chkProduct(f,id){
+ const sku=String(f.sku||'').trim().toUpperCase();
+ if(!sku)throw Error('SKU is required');
+ if(!String(f.name||'').trim())throw Error('Product name is required');
+ if(D.products.some(p=>p.sku===sku&&p.id!==id))throw Error('SKU '+sku+' already exists (must be unique)');
+ if(!(f.price>=0))throw Error('Price must be 0 or more');
+ if(!(Number.isInteger(f.reorder)&&f.reorder>=0))throw Error('Reorder level must be a whole number, 0 or more');
+ return sku;
+}
+function addProduct(f){const sku=chkProduct(f);const p={id:++D.seq.p,sku,name:f.name.trim(),price:f.price,cost:0,qty:0,reorder:f.reorder};D.products.push(p);return p}
+function updProduct(id,f){const p=D.products.find(x=>x.id===id);p.sku=chkProduct(f,id);p.name=f.name.trim();p.price=f.price;p.reorder=f.reorder} /* qty/cost are NOT editable: only movements change them */
+function delProduct(id){
+ if(D.items.some(i=>i.pid===id)||D.purchases.some(p=>p.pid===id)||D.moves.some(m=>m.pid===id&&m.type!=='purchase'))throw Error('Cannot delete: product has sales history');
+ D.products=D.products.filter(p=>p.id!==id);D.purchases=D.purchases.filter(p=>p.pid!==id);D.moves=D.moves.filter(m=>m.pid!==id);
+}
+function chkCust(f){if(!String(f.name||'').trim())throw Error('Customer name is required');if(f.phone&&D.customers.some(c=>c.phone===f.phone&&c.id!==f.id))throw Error('Phone number already belongs to another customer')}
+function addCustomer(f){chkCust(f);D.customers.push({id:++D.seq.c,name:f.name.trim(),phone:(f.phone||'').trim()})}
+function updCustomer(id,f){chkCust({...f,id});const c=D.customers.find(x=>x.id===id);c.name=f.name.trim();c.phone=(f.phone||'').trim()}
+function delCustomer(id){if(D.sales.some(s=>s.cid===id))throw Error('Cannot delete: customer has sales on record');D.customers=D.customers.filter(c=>c.id!==id)}
+/* ===== Transactions: one event updates Inventory AND Financials ===== */
+function receive(pid,qty,unitCost){
+ const p=D.products.find(x=>x.id===pid);if(!p)throw Error('Choose a product');
+ if(!(Number.isInteger(qty)&&qty>0))throw Error('Quantity must be a whole number above 0');
+ if(!(unitCost>=0))throw Error('Unit cost must be 0 or more');
+ p.cost=(p.qty*p.cost+qty*unitCost)/(p.qty+qty); /* weighted average cost */
+ p.qty+=qty;const total=Math.round(qty*unitCost),id=++D.seq.po;
+ D.purchases.push({id,pid,qty,unitCost,date:today()});move(pid,'purchase',qty,'PO-'+id);
+ post('PO-'+id,'Stock received: '+p.sku,[{a:'1200',dr:total},{a:'1000',cr:total}]);
+}
+function createSale(cid,lines,method){
+ if(!lines.length)throw Error('Add at least one item to the sale');
+ const id=++D.seq.s;let total=0,cogs=0;
+ lines.forEach(l=>{
+  const p=D.products.find(x=>x.id===l.pid);
+  if(l.qty>p.qty)throw Error('Not enough stock for '+p.name+' (only '+p.qty+' left)');
+  D.items.push({sale:id,pid:p.id,qty:l.qty,price:p.price,cost:p.cost});
+  total+=l.qty*p.price;cogs+=Math.round(l.qty*p.cost);p.qty-=l.qty;move(p.id,'sale',-l.qty,'SALE-'+id);
+ });
+ D.sales.push({id,cid:cid||null,method,total,cogs,status:'posted',date:today()});
+ post('SALE-'+id,'Sale revenue',[{a:'1000',dr:total},{a:'4000',cr:total}]);
+ post('SALE-'+id,'Cost of goods sold',[{a:'5000',dr:cogs},{a:'1200',cr:cogs}]);
+ return id;
+}
+function voidSale(id){
+ const s=D.sales.find(x=>x.id===id);if(s.status==='void')throw Error('Sale already voided');
+ D.items.filter(i=>i.sale===id).forEach(i=>{D.products.find(p=>p.id===i.pid).qty+=i.qty;move(i.pid,'void',i.qty,'SALE-'+id)});
+ post('VOID-'+id,'Reverse revenue',[{a:'4000',dr:s.total},{a:'1000',cr:s.total}]);
+ post('VOID-'+id,'Reverse COGS',[{a:'1200',dr:s.cogs},{a:'5000',cr:s.cogs}]);
+ s.status='void';
+}
+/* ===== Reports derived from the single ledger ===== */
+const bal=code=>D.jl.filter(l=>l.acct===code).reduce((s,l)=>s+l.dr-l.cr,0);
+const stockValue=()=>D.products.reduce((s,p)=>s+p.qty*p.cost,0);
+/* ===== UI ===== */
+let tab='dash',cart=[],edit=null,msg=null;
+const tabs=[['dash','Dashboard'],['inv','Inventory'],['cust','Customers'],['sales','Sales'],['buy','Purchasing'],['led','Ledger']];
+const val=id=>document.getElementById(id).value;
+function act(f,ok){try{f();msg=ok?{t:'s',m:ok}:null}catch(e){msg={t:'e',m:e.message}}render()}
+function go(t){tab=t;edit=null;msg=null;render()}
+function resetAll(){if(confirm('Reset all data to the sample dataset?')){cart=[];edit=null;init();msg={t:'s',m:'Sample data restored'};render()}}
+const pOpts=()=>D.products.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.qty} in stock)</option>`).join('');
+const cName=id=>id?esc(D.customers.find(c=>c.id===id)?.name||'?'):'Walk-in';
+function view(){
+ if(tab==='dash'){
+  const rev=-bal('4000'),cg=bal('5000'),inv=bal('1200'),sv=stockValue(),tb=D.jl.reduce((s,l)=>s+l.dr-l.cr,0);
+  const low=D.products.filter(p=>p.qty<=p.reorder);
+  return `<div class="grid"><div class="kpi"><b>${fmt(bal('1000'))}</b><span>Cash</span></div><div class="kpi"><b>${fmt(rev)}</b><span>Revenue</span></div><div class="kpi"><b>${fmt(rev-cg)}</b><span>Gross profit</span></div><div class="kpi"><b>${fmt(sv)}</b><span>Stock value</span></div></div>
+  <div class="card"><h2>Integrity checks (single source of truth)</h2>
+  <p>${tb===0?'✓':'✗'} Ledger balanced: total debits equal total credits.</p>
+  <p>${Math.abs(inv-sv)<=D.products.length?'✓':'✗'} Inventory ledger ${fmt(inv)} matches stock on hand valued at average cost ${fmt(sv)} (rounding tolerance UGX 1 per product).</p></div>
+  <div class="card"><h2>Reorder alerts</h2>${low.length?low.map(p=>`<p class="low">${esc(p.name)}: ${p.qty} left (reorder at ${p.reorder})</p>`).join(''):'<p class="mut">All products are above their reorder level.</p>'}</div>
+  <button class="g d" onclick="resetAll()">Reset to sample data</button>`;
+ }
+ if(tab==='inv'){
+  const p=edit?.t==='p'?D.products.find(x=>x.id===edit.id):{};
+  return `<div class="card"><h2>${edit?'Edit product':'New product'}</h2><form onsubmit="event.preventDefault();saveP()">
+  <label>SKU<input id="f1" value="${esc(p.sku)}"></label><label>Name<input id="f2" value="${esc(p.name)}"></label>
+  <label>Selling price (UGX)<input id="f3" type="number" value="${p.price??''}"></label><label>Reorder level<input id="f4" type="number" value="${p.reorder??5}"></label>
+  <button class="b">${edit?'Save changes':'Add product'}</button>${edit?'<button type="button" class="g" onclick="edit=null;render()">Cancel</button>':''}</form>
+  <p class="mut">Stock and cost cannot be typed in: they change only through Purchasing and Sales.</p></div>
+  <div class="card tw"><table><tr><th>SKU</th><th>Product</th><th class="r">Price</th><th class="r">Avg cost</th><th class="r">On hand</th><th></th></tr>
+  ${D.products.map(p=>`<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td class="r">${fmt(p.price)}</td><td class="r">${fmt(p.cost)}</td><td class="r ${p.qty<=p.reorder?'low':''}">${p.qty}</td><td><button class="g" onclick="edit={t:'p',id:${p.id}};render()">Edit</button> <button class="g d" onclick="act(()=>tx(()=>delProduct(${p.id})),'Product deleted')">Delete</button></td></tr>`).join('')}</table></div>
+  <div class="card tw"><h2>Recent stock movements</h2><table><tr><th>Date</th><th>Product</th><th>Type</th><th class="r">Qty</th><th>Ref</th></tr>
+  ${D.moves.slice(-8).reverse().map(m=>`<tr><td>${m.date}</td><td>${esc(D.products.find(p=>p.id===m.pid)?.name)}</td><td>${m.type}</td><td class="r">${m.qty}</td><td>${m.ref}</td></tr>`).join('')}</table></div>`;
+ }
+ if(tab==='cust'){
+  const c=edit?.t==='c'?D.customers.find(x=>x.id===edit.id):{};
+  return `<div class="card"><h2>${edit?'Edit customer':'New customer'}</h2><form onsubmit="event.preventDefault();saveC()">
+  <label>Name<input id="f1" value="${esc(c.name)}"></label><label>Phone<input id="f2" value="${esc(c.phone)}"></label>
+  <button class="b">${edit?'Save changes':'Add customer'}</button>${edit?'<button type="button" class="g" onclick="edit=null;render()">Cancel</button>':''}</form></div>
+  <div class="card tw"><table><tr><th>Customer</th><th>Phone</th><th class="r">Lifetime sales</th><th></th></tr>
+  ${D.customers.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.phone)}</td><td class="r">${fmt(D.sales.filter(s=>s.cid===c.id&&s.status==='posted').reduce((a,s)=>a+s.total,0))}</td><td><button class="g" onclick="edit={t:'c',id:${c.id}};render()">Edit</button> <button class="g d" onclick="act(()=>tx(()=>delCustomer(${c.id})),'Customer deleted')">Delete</button></td></tr>`).join('')}</table></div>`;
+ }
+ if(tab==='sales'){
+  const tot=cart.reduce((s,l)=>s+l.qty*D.products.find(p=>p.id===l.pid).price,0);
+  return `<div class="card"><h2>New sale</h2><div class="row">
+  <label>Customer<select id="sc"><option value="">Walk-in</option>${D.customers.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
+  <label>Payment<select id="sm"><option>Cash</option><option>Mobile money</option></select></label>
+  <label>Product<select id="sp">${pOpts()}</select></label><label>Qty<input id="sq" type="number" value="1" style="min-width:70px"></label>
+  <button class="g" onclick="addLine()">Add to sale</button></div>
+  ${cart.length?`<div class="rcpt">${cart.map(l=>{const p=D.products.find(x=>x.id===l.pid);return `<div><span>${l.qty} × ${esc(p.name)}</span><span>${fmt(l.qty*p.price)}</span></div>`}).join('')}<div><b>TOTAL</b><b>${fmt(tot)}</b></div></div>
+  <p><button class="b" onclick="act(()=>{tx(()=>createSale(+val('sc')||null,cart,val('sm')));cart=[]},'Sale completed: stock and ledger updated')">Complete sale</button> <button class="g" onclick="cart=[];render()">Clear</button></p>`:'<p class="mut">Add products to build the sale.</p>'}</div>
+  <div class="card tw"><h2>Sales history</h2><table><tr><th>#</th><th>Date</th><th>Customer</th><th>Payment</th><th class="r">Total</th><th>Status</th><th></th></tr>
+  ${D.sales.slice().reverse().map(s=>`<tr><td>${s.id}</td><td>${s.date}</td><td>${cName(s.cid)}</td><td>${s.method}</td><td class="r">${fmt(s.total)}</td><td>${s.status}</td><td>${s.status==='posted'?`<button class="g d" onclick="act(()=>tx(()=>voidSale(${s.id})),'Sale voided: stock and ledger reversed')">Void</button>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="mut">No sales yet.</td></tr>'}</table></div>`;
+ }
+ if(tab==='buy')return `<div class="card"><h2>Receive stock</h2><form onsubmit="event.preventDefault();act(()=>tx(()=>receive(+val('bp'),parseInt(val('bq')),parseFloat(val('bc')))),'Stock received: inventory and ledger updated')">
+  <label>Product<select id="bp">${pOpts()}</select></label><label>Quantity<input id="bq" type="number" value="10"></label><label>Unit cost (UGX)<input id="bc" type="number" value="0"></label><button class="b">Receive stock</button></form></div>
+  <div class="card tw"><h2>Purchase history</h2><table><tr><th>PO</th><th>Date</th><th>Product</th><th class="r">Qty</th><th class="r">Unit cost</th></tr>
+  ${D.purchases.slice().reverse().map(p=>`<tr><td>${p.id}</td><td>${p.date}</td><td>${esc(D.products.find(x=>x.id===p.pid)?.name)}</td><td class="r">${p.qty}</td><td class="r">${fmt(p.unitCost)}</td></tr>`).join('')}</table></div>`;
+ const tb=D.accounts.map(a=>({...a,b:bal(a.code)}));
+ return `<div class="card tw"><h2>Trial balance</h2><table><tr><th>Code</th><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr>
+  ${tb.map(a=>`<tr><td>${a.code}</td><td>${a.name}</td><td class="r">${a.b>0?fmt(a.b):''}</td><td class="r">${a.b<0?fmt(-a.b):''}</td></tr>`).join('')}
+  <tr><th></th><th>Total</th><th class="r">${fmt(tb.filter(a=>a.b>0).reduce((s,a)=>s+a.b,0))}</th><th class="r">${fmt(-tb.filter(a=>a.b<0).reduce((s,a)=>s+a.b,0))}</th></tr></table></div>
+  <div class="card tw"><h2>Latest journal lines (read only)</h2><table><tr><th>Entry</th><th>Ref</th><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr>
+  ${D.jl.slice(-14).reverse().map(l=>`<tr><td>${l.je}</td><td>${D.je.find(e=>e.id===l.je).ref}</td><td>${D.accounts.find(a=>a.code===l.acct).name}</td><td class="r">${l.dr?fmt(l.dr):''}</td><td class="r">${l.cr?fmt(l.cr):''}</td></tr>`).join('')}</table></div>`;
+}
+function saveP(){const f={sku:val('f1'),name:val('f2'),price:parseFloat(val('f3')),reorder:parseInt(val('f4'))};
+ act(()=>{tx(()=>edit?updProduct(edit.id,f):addProduct(f));edit=null},'Product saved')}
+function saveC(){const f={name:val('f1'),phone:val('f2')};act(()=>{tx(()=>edit?updCustomer(edit.id,f):addCustomer(f));edit=null},'Customer saved')}
+function addLine(){act(()=>{const pid=+val('sp'),qty=parseInt(val('sq'));const p=D.products.find(x=>x.id===pid);
+ if(!p)throw Error('Choose a product');if(!(qty>0))throw Error('Quantity must be above 0');
+ const ex=cart.find(l=>l.pid===pid),n=(ex?.qty||0)+qty;if(n>p.qty)throw Error('Only '+p.qty+' of '+p.name+' in stock');
+ ex?ex.qty=n:cart.push({pid,qty})})}
+function render(){
+ document.getElementById('nav').innerHTML=tabs.map(([k,n])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${n}</button>`).join('');
+ document.getElementById('app').innerHTML=(msg?`<div class="msg ${msg.t}" role="status">${esc(msg.m)}</div>`:'')+view();
+}
+D=load();if(!D)init();render();
+</script></body></html>
