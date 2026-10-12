@@ -7,7 +7,7 @@ A lightweight ERP prototype for a neighbourhood grocery shop, built for the **Mi
 
 A single business event updates both modules. For example, completing a sale reduces stock *and* posts revenue and cost-of-goods-sold entries to the ledger in one atomic transaction.
 
-**Author:** _[your name]_  **Course:** _[course name and code]_  **Date:** _[date]_
+**Author:** _Umwiz Arahenda Beatrice_  **Course:** _[BSCS _1101]  **Date:** _12th- 11- 2026_
 
 ---
 
